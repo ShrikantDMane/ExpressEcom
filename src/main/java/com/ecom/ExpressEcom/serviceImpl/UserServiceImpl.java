@@ -2,10 +2,14 @@ package com.ecom.ExpressEcom.serviceImpl;
 
 import com.ecom.ExpressEcom.constants.AppConstants;
 import com.ecom.ExpressEcom.dto.UserDTO;
+import com.ecom.ExpressEcom.entity.Address;
+import com.ecom.ExpressEcom.entity.Credentials;
 import com.ecom.ExpressEcom.entity.User;
 import com.ecom.ExpressEcom.exception.DuplicateResourceException;
 import com.ecom.ExpressEcom.exception.ResourceNotFoundException;
 import com.ecom.ExpressEcom.exception.ValidationException;
+import com.ecom.ExpressEcom.mapper.AddressMapper;
+import com.ecom.ExpressEcom.mapper.CredentialsMapper;
 import com.ecom.ExpressEcom.mapper.UserMapper;
 import com.ecom.ExpressEcom.repository.UserRepo;
 import lombok.RequiredArgsConstructor;
@@ -13,17 +17,18 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
 @Slf4j
 public class UserServiceImpl {
-
     @Autowired
     private UserRepo userRepository;
-
 
     public UserDTO findById(Integer id) {
         Objects.requireNonNull(id, "User ID cannot be null");
@@ -34,7 +39,6 @@ public class UserServiceImpl {
                         String.format(AppConstants.USER_NOT_FOUND, id)
                 ));
     }
-
 
     public UserDTO findByEmail(String email) {
         if (email == null || email.isBlank()) {
@@ -48,19 +52,14 @@ public class UserServiceImpl {
                 ));
     }
 
-
     public List<UserDTO> findAll() {
         return userRepository.findAll().stream()
                 .map(UserMapper::toDTO)
                 .collect(Collectors.toList());
     }
 
-
     @Transactional
     public UserDTO save(UserDTO userDTO) {
-        // Note: Basic validation is now done with annotations
-        // Here we only perform business rule validation
-
         // Check if email already exists
         if (userDTO.getEmail() != null && userRepository.existsByEmail(userDTO.getEmail())) {
             throw new DuplicateResourceException(
@@ -74,7 +73,6 @@ public class UserServiceImpl {
 
         return UserMapper.toDTO(savedUser);
     }
-
 
     @Transactional
     public UserDTO update(Integer id, UserDTO userDTO) {
@@ -93,14 +91,15 @@ public class UserServiceImpl {
             );
         }
 
-        // Update user fields
-        User updatedUser = updateUserFields(existingUser, userDTO);
-        User savedUser = userRepository.save(updatedUser);
+        // Update all user fields including nested objects
+        updateUserFields(existingUser, userDTO);
+
+        // Save the updated user
+        User savedUser = userRepository.save(existingUser);
         log.info("User updated with ID: {}", savedUser.getUserId());
 
         return UserMapper.toDTO(savedUser);
     }
-
 
     @Transactional
     public void delete(Integer id) {
@@ -116,8 +115,8 @@ public class UserServiceImpl {
         log.info("User deleted with ID: {}", id);
     }
 
-    private User updateUserFields(User existingUser, UserDTO userDTO) {
-        // Update only non-null fields
+    private void updateUserFields(User existingUser, UserDTO userDTO) {
+        // Update basic fields
         if (userDTO.getFirstName() != null) {
             existingUser.setFirstName(userDTO.getFirstName());
         }
@@ -134,8 +133,45 @@ public class UserServiceImpl {
             existingUser.setProjectName(userDTO.getProjectName());
         }
 
-        // For credentials and addresses, we would need more complex logic
-        // This is a simplified version
-        return existingUser;
+        // Update credentials if provided
+        if (userDTO.getCredentialsDTO() != null) {
+            Credentials updatedCredentials = CredentialsMapper.toEntity(userDTO.getCredentialsDTO());
+            if (existingUser.getCredentials() == null) {
+                // Create new credentials if none exist
+                updatedCredentials.setUser(existingUser);
+                existingUser.setCredentials(updatedCredentials);
+            } else {
+                // Update existing credentials
+                Credentials existingCredentials = existingUser.getCredentials();
+                if (updatedCredentials.getUserName() != null) {
+                    existingCredentials.setUserName(updatedCredentials.getUserName());
+                }
+                if (updatedCredentials.getPazzword() != null) {
+                    existingCredentials.setPazzword(updatedCredentials.getPazzword());
+                }
+                if (updatedCredentials.getRoleBasedAuthority() != null) {
+                    existingCredentials.setRoleBasedAuthority(updatedCredentials.getRoleBasedAuthority());
+                }
+            }
+        }
+
+        // Update addresses if provided
+        if (userDTO.getAddressDTOSet() != null && !userDTO.getAddressDTOSet().isEmpty()) {
+            // Clear existing addresses and add new ones
+            if (existingUser.getAddress() == null) {
+                existingUser.setAddress(new HashSet<>());
+            } else {
+                existingUser.getAddress().clear();
+            }
+
+            // Convert DTOs to entities and add to user
+            Set<Address> newAddresses = userDTO.getAddressDTOSet().stream()
+                    .map(AddressMapper::toAddressEntity)
+                    .collect(Collectors.toSet());
+
+            // Set the user reference for each address
+            newAddresses.forEach(address -> address.setUser(existingUser));
+            existingUser.getAddress().addAll(newAddresses);
+        }
     }
 }

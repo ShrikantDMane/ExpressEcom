@@ -11,7 +11,7 @@ public interface AddressMapper {
 
          return Address.builder()
                 .streetName(addressDTO.getStreetName())
-                .city(addressDTO.getStreetName())
+                .city(addressDTO.getCity())
                 .state(addressDTO.getState())
                 .zipCode(addressDTO.getZipCode())
                 .build();
