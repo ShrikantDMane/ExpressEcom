@@ -9,7 +9,7 @@
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 	<groupId>com.ecom</groupId>
-	<artifactId>ExpressEcom</artifactId>
+	<artifactId>ExpressEcomUser</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>ExpressEcom</name>
 	<description>Microservices Based Project</description>
